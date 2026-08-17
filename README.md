@@ -1,1 +1,483 @@
-# -_
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Мир частей речи</title>
+  
+  <!-- CDN библиотеки -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+
+  <style>
+    .mirror { transform: scaleX(-1); }
+  </style>
+</head>
+<body class="bg-slate-100 font-sans text-slate-800 min-h-screen selection:bg-teal-200">
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    const THEORY_DATA = [
+      { id: 'noun', name: 'Имя существительное', question: 'Кто? Что?', rule: 'Обозначает предмет.', examples: ['Школа', 'Книга', 'Ученик'], color: 'bg-blue-500', bgLight: 'bg-blue-50', border: 'border-blue-400' },
+      { id: 'adj', name: 'Имя прилагательное', question: 'Какой? Какая? Какое?', rule: 'Обозначает признак предмета.', examples: ['Красивый', 'Умный', 'Яркая'], color: 'bg-purple-500', bgLight: 'bg-purple-50', border: 'border-purple-400' },
+      { id: 'verb', name: 'Глагол', question: 'Что делать? Что сделать?', rule: 'Обозначает действие предмета.', examples: ['Читать', 'Писать', 'Бегать'], color: 'bg-teal-500', bgLight: 'bg-teal-50', border: 'border-teal-400' },
+      { id: 'pronoun', name: 'Местоимение', question: 'Указывает на предмет', rule: 'Указывает на предмет, но не называет его.', examples: ['Я', 'Мы', 'Они'], color: 'bg-indigo-500', bgLight: 'bg-indigo-50', border: 'border-indigo-400' },
+      { id: 'adverb', name: 'Наречие', question: 'Как? Где? Когда?', rule: 'Обозначает признак действия.', examples: ['Быстро', 'Громко', 'Вчера'], color: 'bg-amber-500', bgLight: 'bg-amber-50', border: 'border-amber-400' },
+      { id: 'num', name: 'Числительное', question: 'Сколько? Какой по счёту?', rule: 'Обозначает количество или порядок.', examples: ['Пять', 'Первый', 'Десять'], color: 'bg-rose-500', bgLight: 'bg-rose-50', border: 'border-rose-400' },
+      { id: 'aux', name: 'Служебные части речи', question: 'Предлоги, союзы, частицы', rule: 'Помогают связывать слова в предложении.', examples: ['В', 'На', 'И', 'Не'], color: 'bg-emerald-500', bgLight: 'bg-emerald-50', border: 'border-emerald-400' }
+    ];
+
+    const GAME_1_DATA = [
+      { word: 'Школа', options: ['Существительное', 'Прилагательное', 'Глагол', 'Наречие'], correct: 0, exp: 'Школа отвечает на вопрос «Что?» — это имя существительное.' },
+      { word: 'Красивый', options: ['Глагол', 'Прилагательное', 'Местоимение', 'Существительное'], correct: 1, exp: 'Красивый отвечает на вопрос «Какой?» — это имя прилагательное.' },
+      { word: 'Читать', options: ['Числительное', 'Глагол', 'Наречие', 'Союз'], correct: 1, exp: 'Читать отвечает на вопрос «Что делать?» — это глагол.' },
+      { word: 'Быстро', options: ['Наречие', 'Существительное', 'Предлог', 'Прилагательное'], correct: 0, exp: 'Быстро отвечает на вопрос «Как?» — это наречие.' },
+      { word: 'Пять', options: ['Прилагательное', 'Числительное', 'Глагол', 'Существительное'], correct: 1, exp: 'Пять отвечает на вопрос «Сколько?» — это имя числительное.' },
+      { word: 'Бегать', options: ['Глагол', 'Прилагательное', 'Наречие', 'Существительное'], correct: 0, exp: 'Бегать отвечает на вопрос «Что делать?» — это глагол.' },
+      { word: 'Умный', options: ['Существительное', 'Прилагательное', 'Предлог', 'Глагол'], correct: 1, exp: 'Умный отвечает на вопрос «Какой?» — это имя прилагательное.' },
+      { word: 'Завтра', options: ['Наречие', 'Числительное', 'Местоимение', 'Глагол'], correct: 0, exp: 'Завтра отвечает на вопрос «Когда?» — это наречие.' },
+      { word: 'Десять', options: ['Числительное', 'Существительное', 'Глагол', 'Прилагательное'], correct: 0, exp: 'Десять отвечает на вопрос «Сколько?» — это имя числительное.' },
+      { word: 'Ученик', options: ['Существительное', 'Глагол', 'Наречие', 'Прилагательное'], correct: 0, exp: 'Ученик отвечает на вопрос «Кто?» — это имя существительное.' }
+    ];
+
+    function App() {
+      const [screen, setScreen] = useState('splash');
+      const [student, setStudent] = useState({ name: '', grade: '5', lang: 'ru' });
+      const [currentQ, setCurrentQ] = useState(0);
+      const [score, setScore] = useState(0);
+      const [cameraActive, setCameraActive] = useState(false);
+      
+      // Логика проверки и истории
+      const [selectedAnswer, setSelectedAnswer] = useState(null);
+      const [isLock, setIsLock] = useState(false);
+      const [history, setHistory] = useState([]);
+
+      const [hoveredIndex, setHoveredIndex] = useState(null);
+      const [progress, setProgress] = useState(0);
+
+      const videoRef = useRef(null);
+      const canvasRef = useRef(null);
+      const optionRefs = useRef([]);
+      const hoverTimerRef = useRef(null);
+      const activeHoverRef = useRef(null);
+      const handleAnswerRef = useRef(null);
+
+      const speakText = (text) => {
+        if ('speechSynthesis' in window) {
+          window.speechSynthesis.cancel();
+          const utterance = new SpeechSynthesisUtterance(text);
+          utterance.lang = 'ru-RU';
+          window.speechSynthesis.speak(utterance);
+        }
+      };
+
+      const handleAnswer = (index) => {
+        if (isLock) return;
+        setIsLock(true);
+        setSelectedAnswer(index);
+
+        const isCorrect = index === GAME_1_DATA[currentQ].correct;
+        const newScore = isCorrect ? score + 10 : score;
+        if (isCorrect) setScore(newScore);
+
+        // Запись результата в историю учителя
+        const newRecord = {
+          word: GAME_1_DATA[currentQ].word,
+          userChoice: GAME_1_DATA[currentQ].options[index],
+          correctChoice: GAME_1_DATA[currentQ].options[GAME_1_DATA[currentQ].correct],
+          isCorrect: isCorrect
+        };
+        const updatedHistory = [...history, newRecord];
+        setHistory(updatedHistory);
+
+        // Показываем подцветку и объяснение 2 секунды перед следующим вопросом
+        setTimeout(() => {
+          setSelectedAnswer(null);
+          setIsLock(false);
+          setHoveredIndex(null);
+          setProgress(0);
+          activeHoverRef.current = null;
+          if (hoverTimerRef.current) clearInterval(hoverTimerRef.current);
+
+          if (currentQ + 1 < GAME_1_DATA.length) {
+            setCurrentQ(prev => prev + 1);
+          } else {
+            // Сохраняем в localStorage для учителя
+            const teacherReport = {
+              student: student.name || 'Ученик',
+              grade: student.grade,
+              score: newScore,
+              total: GAME_1_DATA.length * 10,
+              date: new Date().toLocaleString('ru-RU'),
+              history: updatedHistory
+            };
+            localStorage.setItem('last_quiz_result', JSON.stringify(teacherReport));
+            setScreen('results');
+          }
+        }, 2000);
+      };
+
+      useEffect(() => {
+        handleAnswerRef.current = handleAnswer;
+      });
+
+      // Трекинг рук через камеру
+      useEffect(() => {
+        let camera = null;
+        if (screen === 'game' && cameraActive && videoRef.current && canvasRef.current) {
+          const hands = new window.Hands({
+            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+          });
+
+          hands.setOptions({
+            maxNumHands: 1,
+            modelComplexity: 1,
+            minDetectionConfidence: 0.6,
+            minTrackingConfidence: 0.6
+          });
+
+          hands.onResults((results) => {
+            const canvasCtx = canvasRef.current.getContext('2d');
+            canvasCtx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+            
+            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+              const landmarks = results.multiHandLandmarks[0];
+              const x = (1 - landmarks[8].x) * window.innerWidth;
+              const y = landmarks[8].y * window.innerHeight;
+
+              canvasCtx.fillStyle = '#0d9488';
+              canvasCtx.beginPath();
+              canvasCtx.arc(x, y, 20, 0, 2 * Math.PI);
+              canvasCtx.fill();
+              canvasCtx.lineWidth = 4;
+              canvasCtx.strokeStyle = '#ffffff';
+              canvasCtx.stroke();
+
+              let foundHover = null;
+              optionRefs.current.forEach((el, index) => {
+                if (el) {
+                  const rect = el.getBoundingClientRect();
+                  if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
+                    foundHover = index;
+                  }
+                }
+              });
+
+              if (foundHover !== null) {
+                if (activeHoverRef.current !== foundHover) {
+                  activeHoverRef.current = foundHover;
+                  setHoveredIndex(foundHover);
+                  setProgress(0);
+                  if (hoverTimerRef.current) clearInterval(hoverTimerRef.current);
+
+                  let start = Date.now();
+                  hoverTimerRef.current = setInterval(() => {
+                    let elapsed = Date.now() - start;
+                    let p = Math.min(100, (elapsed / 1500) * 100);
+                    setProgress(p);
+
+                    if (elapsed >= 1500) {
+                      clearInterval(hoverTimerRef.current);
+                      if (handleAnswerRef.current) {
+                        handleAnswerRef.current(foundHover);
+                      }
+                    }
+                  }, 50);
+                }
+              } else {
+                if (activeHoverRef.current !== null) {
+                  activeHoverRef.current = null;
+                  setHoveredIndex(null);
+                  setProgress(0);
+                  if (hoverTimerRef.current) clearInterval(hoverTimerRef.current);
+                }
+              }
+            } else {
+              if (activeHoverRef.current !== null) {
+                activeHoverRef.current = null;
+                setHoveredIndex(null);
+                setProgress(0);
+                if (hoverTimerRef.current) clearInterval(hoverTimerRef.current);
+              }
+            }
+          });
+
+          camera = new window.Camera(videoRef.current, {
+            onFrame: async () => {
+              if (videoRef.current) await hands.send({ image: videoRef.current });
+            },
+            width: 1280,
+            height: 720
+          });
+          camera.start();
+        }
+
+        return () => {
+          if (camera) camera.stop();
+          if (hoverTimerRef.current) clearInterval(hoverTimerRef.current);
+        };
+      }, [screen, cameraActive]);
+
+      // Скачать результаты учителя в файлик TXT
+      const downloadReport = () => {
+        const savedData = localStorage.getItem('last_quiz_result');
+        if (!savedData) return;
+        const res = JSON.parse(savedData);
+        let text = `ОТЧЁТ УЧИТЕЛЮ: МИР ЧАСТЕЙ РЕЧИ\n`;
+        text += `Ученик: ${res.student}\n`;
+        text += `Класс: ${res.grade}\n`;
+        text += `Дата: ${res.date}\n`;
+        text += `Результат: ${res.score} из ${res.total} баллов (${(res.score / res.total) * 100}%)\n\n`;
+        text += `ПОДРОБНЫЙ РАЗБОР:\n`;
+        res.history.forEach((item, i) => {
+          text += `${i + 1}. Слово «${item.word}» -> Ответ: ${item.userChoice} [${item.isCorrect ? 'ВЕРНО' : 'ОШИБКА, верно: ' + item.correctChoice}]\n`;
+        });
+
+        const element = document.createElement("a");
+        const file = new Blob([text], {type: 'text/plain'});
+        element.href = URL.createObjectURL(file);
+        element.download = `Отчет_${res.student}_${res.grade}класс.txt`;
+        document.body.appendChild(element);
+        element.click();
+      };
+
+      return (
+        <div class="min-h-screen flex flex-col justify-between">
+          
+          {screen !== 'splash' && (
+            <header class="bg-white/90 backdrop-blur border-b border-slate-200 sticky top-0 z-40 px-6 py-4 flex justify-between items-center shadow-sm">
+              <div class="flex items-center gap-3 cursor-pointer" onClick={() => setScreen('splash')}>
+                <span class="text-3xl">📚</span>
+                <div>
+                  <h1 class="text-xl font-black text-blue-700 leading-none">МИР ЧАСТЕЙ РЕЧИ</h1>
+                  <p class="text-xs text-slate-500 font-medium">Учимся, двигаемся, играем!</p>
+                </div>
+              </div>
+
+              <nav class="flex gap-2">
+                {['Theory', 'Game', 'Results'].map((tab) => (
+                  <button 
+                    key={tab}
+                    onClick={() => setScreen(tab.toLowerCase())}
+                    class={`px-4 py-2 rounded-xl text-sm font-bold transition ${screen === tab.toLowerCase() ? 'bg-blue-600 text-white' : 'hover:bg-slate-100 text-slate-600'}`}>
+                    {tab === 'Theory' ? 'Теория' : tab === 'Game' ? 'Игры' : 'Результаты'}
+                  </button>
+                ))}
+              </nav>
+            </header>
+          )}
+
+          {/* ЗАСТАВКА */}
+          {screen === 'splash' && (
+            <main class="flex-1 flex items-center justify-center p-6 relative overflow-hidden bg-gradient-to-br from-blue-900 via-indigo-900 to-slate-900 text-white">
+              <div class="max-w-2xl w-full text-center relative z-10 bg-white/10 backdrop-blur-md p-10 rounded-3xl border border-white/20 shadow-2xl">
+                <h1 class="text-3xl md:text-4xl font-extrabold mb-2">ОБРАЗОВАТЕЛЬНЫЙ САЙТ</h1>
+                <h2 class="text-3xl md:text-4xl font-black text-teal-300 mb-8">«МИР ЧАСТЕЙ РЕЧИ»</h2>
+
+                <div class="bg-white/10 p-6 rounded-2xl mb-8 border border-white/10 text-left space-y-1">
+                  <p class="text-xs uppercase text-slate-300 font-bold">Автор-создатель:</p>
+                  <p class="text-xl font-bold text-teal-200">Бескемпирова Айгерим Жумабаевна</p>
+                  <p class="text-sm text-slate-200">педагог-модератор</p>
+                  <p class="text-sm text-slate-300">КГУ «Общеобразовательная школа имени Абая»</p>
+                </div>
+
+                <button 
+                  onClick={() => setScreen('reg')} 
+                  class="bg-teal-400 hover:bg-teal-500 text-white font-extrabold text-lg py-4 px-10 rounded-2xl shadow-lg transition">
+                  Перейти на сайт
+                </button>
+              </div>
+            </main>
+          )}
+
+          {/* РЕГИСТРАЦИЯ */}
+          {screen === 'reg' && (
+            <main class="flex-1 flex items-center justify-center p-6">
+              <div class="max-w-md w-full bg-white p-8 rounded-3xl shadow-xl border border-slate-100">
+                <h2 class="text-2xl font-bold text-center mb-6">Регистрация ученика</h2>
+                <input 
+                  type="text" 
+                  placeholder="Введите имя" 
+                  value={student.name}
+                  onChange={(e) => setStudent({...student, name: e.target.value})}
+                  class="w-full border-2 border-slate-200 p-3.5 rounded-xl mb-4"
+                />
+                <button onClick={() => setScreen('theory')} class="w-full bg-blue-600 text-white font-bold py-3.5 rounded-xl mb-2">Продолжить</button>
+                <button onClick={() => setScreen('theory')} class="w-full bg-slate-100 text-slate-600 font-bold py-3 rounded-xl">Без регистрации</button>
+              </div>
+            </main>
+          )}
+
+          {/* ТЕОРИЯ */}
+          {screen === 'theory' && (
+            <main class="flex-1 max-w-6xl w-full mx-auto p-6">
+              <h2 class="text-3xl font-black text-center mb-8">Изучаем части речи</h2>
+              <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+                {THEORY_DATA.map((item) => (
+                  <div key={item.id} class={`p-6 rounded-2xl border-2 ${item.border} ${item.bgLight} shadow-sm`}>
+                    <div class="flex justify-between items-start mb-2">
+                      <span class={`text-xs font-bold text-white px-2.5 py-1 rounded-full ${item.color}`}>{item.question}</span>
+                      <button onClick={() => speakText(`${item.name}. ${item.rule}`)} class="bg-white p-2 rounded-full shadow">🔊</button>
+                    </div>
+                    <h3 class="text-xl font-extrabold mb-1">{item.name}</h3>
+                    <p class="text-sm text-slate-600">{item.rule}</p>
+                  </div>
+                ))}
+              </div>
+              <div class="text-center">
+                <button onClick={() => setScreen('game')} class="bg-teal-500 text-white font-black text-lg py-4 px-10 rounded-2xl shadow-lg">Перейти к играм 🎮</button>
+              </div>
+            </main>
+          )}
+
+          {/* ИГРА С ПРОВЕРКОЙ ПРАВИЛЬНОСТИ */}
+          {screen === 'game' && (
+            <main class="flex-1 relative bg-slate-900 text-white flex flex-col justify-between p-6">
+              <video ref={videoRef} class="absolute inset-0 w-full h-full object-cover mirror opacity-30 pointer-events-none" autoPlay playsInline muted></video>
+              <canvas ref={canvasRef} class="absolute inset-0 w-full h-full z-30 pointer-events-none" width={window.innerWidth} height={window.innerHeight}></canvas>
+
+              <div class="relative z-20 flex justify-between items-center bg-white/10 backdrop-blur p-4 rounded-2xl border border-white/10">
+                <div>
+                  <span class="text-xs text-slate-300 font-bold">Вопрос {currentQ + 1} из {GAME_1_DATA.length}</span>
+                  <h3 class="text-2xl font-black text-teal-300">Слово: «{GAME_1_DATA[currentQ].word}»</h3>
+                </div>
+                <div class="flex items-center gap-4">
+                  <p class="text-xl font-black text-amber-300">{score} б.</p>
+                  <button onClick={() => setCameraActive(!cameraActive)} class={`px-4 py-2 rounded-xl font-bold text-xs ${cameraActive ? 'bg-rose-500' : 'bg-teal-500'}`}>
+                    {cameraActive ? 'Выключить камеру' : 'Включить камеру 📷'}
+                  </button>
+                </div>
+              </div>
+
+              {/* ВСПЛЫВАЮЩЕЕ ОБЪЯСНЕНИЕ ПОСЛЕ ОТВЕТА */}
+              {selectedAnswer !== null && (
+                <div class="relative z-30 max-w-xl mx-auto my-2 p-4 rounded-2xl text-center font-bold text-lg shadow-xl animate-bounce bg-white text-slate-900 border-4 border-amber-400">
+                  {selectedAnswer === GAME_1_DATA[currentQ].correct ? '🎉 ВЕРНО!' : '❌ ОШИБКА!'} 
+                  <p class="text-sm font-normal text-slate-600 mt-1">{GAME_1_DATA[currentQ].exp}</p>
+                </div>
+              )}
+
+              {/* КАРТОЧКИ ОТВЕТОВ С ЦВЕТОВОЙ ПОДСВЕТКОЙ ПРАВИЛЬНОСТИ */}
+              <div class="relative z-20 grid grid-cols-1 md:grid-cols-2 gap-4 my-auto max-w-4xl mx-auto w-full">
+                {GAME_1_DATA[currentQ].options.map((opt, idx) => {
+                  let btnColor = 'border-white/20 bg-white/20';
+                  if (selectedAnswer !== null) {
+                    if (idx === GAME_1_DATA[currentQ].correct) {
+                      btnColor = 'border-emerald-400 bg-emerald-500 text-white scale-105'; // Зеленый правильный
+                    } else if (idx === selectedAnswer) {
+                      btnColor = 'border-rose-400 bg-rose-500 text-white'; // Красный неправильный
+                    }
+                  } else if (hoveredIndex === idx) {
+                    btnColor = 'border-teal-400 bg-teal-500/30 scale-105';
+                  }
+
+                  return (
+                    <button
+                      key={idx}
+                      ref={el => optionRefs.current[idx] = el}
+                      onClick={() => handleAnswer(idx)}
+                      disabled={isLock}
+                      class={`relative overflow-hidden backdrop-blur border-4 p-8 rounded-2xl text-2xl font-black text-white text-center transition shadow-lg ${btnColor}`}>
+                      
+                      {hoveredIndex === idx && selectedAnswer === null && (
+                        <div 
+                          class="absolute bottom-0 left-0 h-2 bg-teal-400 transition-all duration-75" 
+                          style={{ width: `${progress}%` }}></div>
+                      )}
+                      
+                      {opt}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div class="relative z-20 text-center text-xs text-slate-400">
+                {cameraActive ? 'Удерживайте указательный палец над ответом 1.5 секунды' : 'Кликните мышкой по правильному ответу'}
+              </div>
+            </main>
+          )}
+
+          {/* РЕЗУЛЬТАТЫ УЧЕНИКА И УЧИТЕЛЯ */}
+          {screen === 'results' && (
+            <main class="flex-1 max-w-4xl w-full mx-auto p-6 space-y-6">
+              
+              {/* Карточка ученика */}
+              <div class="bg-white p-8 rounded-3xl shadow-xl text-center border border-slate-100 max-w-md mx-auto">
+                <span class="text-5xl mb-2 block">🏆</span>
+                <h2 class="text-3xl font-black text-slate-800">Результат игры</h2>
+                <p class="text-slate-500 text-sm mt-1">Ученик: <b>{student.name || 'Ученик'}</b> ({student.grade} класс)</p>
+
+                <div class="bg-slate-50 p-4 rounded-2xl my-4 border border-slate-100">
+                  <p class="text-3xl font-black text-blue-600">{score} баллов</p>
+                  <p class="text-xs text-emerald-600 font-bold mt-1">Успеваемость: {(score / (GAME_1_DATA.length * 10)) * 100}%</p>
+                </div>
+
+                <div class="flex gap-3">
+                  <button onClick={() => { setCurrentQ(0); setScore(0); setHistory([]); setScreen('game'); }} class="flex-1 bg-blue-600 text-white font-bold py-3 rounded-xl shadow">Ещё раз 🔄</button>
+                  <button onClick={() => setScreen('theory')} class="flex-1 bg-slate-100 text-slate-700 font-bold py-3 rounded-xl">Теория 📖</button>
+                </div>
+              </div>
+
+              {/* РЕЗУЛЬТАТЫ ДЛЯ УЧИТЕЛЯ */}
+              <div class="bg-white p-6 rounded-3xl shadow-xl border border-slate-100">
+                <div class="flex justify-between items-center mb-4">
+                  <div>
+                    <h3 class="text-xl font-bold text-slate-800">📊 Панель учителя</h3>
+                    <p class="text-xs text-slate-400">Подробная статистика ответов ученика</p>
+                  </div>
+                  <button 
+                    onClick={downloadReport} 
+                    class="bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs py-2.5 px-4 rounded-xl shadow transition">
+                    📥 Скачать отчёт (TXT)
+                  </button>
+                </div>
+
+                <div class="overflow-x-auto">
+                  <table class="w-full text-left text-sm">
+                    <thead>
+                      <tr class="bg-slate-50 border-b border-slate-200 text-slate-500 text-xs uppercase">
+                        <th class="p-3">#</th>
+                        <th class="p-3">Слово</th>
+                        <th class="p-3">Ответ ученика</th>
+                        <th class="p-3">Правильный ответ</th>
+                        <th class="p-3">Статус</th>
+                      </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100">
+                      {history.map((item, idx) => (
+                        <tr key={idx} class="hover:bg-slate-50">
+                          <td class="p-3 font-bold text-slate-400">{idx + 1}</td>
+                          <td class="p-3 font-bold text-slate-700">«{item.word}»</td>
+                          <td class="p-3">{item.userChoice}</td>
+                          <td class="p-3 text-slate-500">{item.correctChoice}</td>
+                          <td class="p-3">
+                            {item.isCorrect ? (
+                              <span class="bg-emerald-100 text-emerald-700 text-xs font-bold px-2.5 py-1 rounded-full">Верно</span>
+                            ) : (
+                              <span class="bg-rose-100 text-rose-700 text-xs font-bold px-2.5 py-1 rounded-full">Ошибка</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+            </main>
+          )}
+
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
